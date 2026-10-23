@@ -33,27 +33,27 @@ teaser = teaser.replace(cnt, f"c.textContent=(i+1)+' / {total}'")
 # Link-preview (Open Graph / Twitter) tags, so a shared link shows the cover image.
 from html import escape
 SITE = "https://cafebless.com"
-OG_TITLE = "Seven salons built. The eighth is next."
-OG_DESC = "A full-service nail and skin care salon in Orange County, led by a 30-year owner-operator."
-OG_ALT = "Investor presentation cover: Seven salons built. The eighth is next."
+# Owner 2026-10-23: the share preview shows only this text. No description tags.
+OG_TITLE = "Tina's New Salon BP"
+OG_ALT = OG_TITLE
 og = "".join([
     '<meta name="robots" content="noindex,nofollow">',
-    f'<meta name="description" content="{escape(OG_DESC)}">',
     '<meta property="og:type" content="website">',
     f'<meta property="og:url" content="{SITE}/">',
     f'<meta property="og:title" content="{escape(OG_TITLE)}">',
-    f'<meta property="og:description" content="{escape(OG_DESC)}">',
     f'<meta property="og:image" content="{SITE}/og-image.jpg">',
     '<meta property="og:image:type" content="image/jpeg">',
     '<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">',
     f'<meta property="og:image:alt" content="{escape(OG_ALT)}">',
     '<meta name="twitter:card" content="summary_large_image">',
     f'<meta name="twitter:title" content="{escape(OG_TITLE)}">',
-    f'<meta name="twitter:description" content="{escape(OG_DESC)}">',
     f'<meta name="twitter:image" content="{SITE}/og-image.jpg">',
 ])
 assert teaser.count('<meta charset="utf-8">') == 1
 teaser = teaser.replace('<meta charset="utf-8">', '<meta charset="utf-8">' + og, 1)
+old_title = "<title>Nail Salon Investor Deck</title>"
+assert teaser.count(old_title) == 1
+teaser = teaser.replace(old_title, "<title>" + OG_TITLE + "</title>", 1)
 
 salt, iv = os.urandom(16), os.urandom(16)
 p = pw.encode()
