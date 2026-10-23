@@ -1,0 +1,43 @@
+<style>
+#gate{position:fixed;inset:0;z-index:99999;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(13,10,9,.88);font-family:"Segoe UI",Helvetica,Arial,sans-serif}
+#gate.on{display:flex}
+#gate form{width:100%;max-width:360px;background:#18120f;color:#f8f2ec;border:1px solid #5a4850;border-radius:12px;padding:28px}
+#gate h2{font-size:20px;margin:0 0 6px}#gate p{margin:0 0 18px;color:#dccfc6;font-size:14px}
+#gate input,#gate button{width:100%;font:inherit;padding:12px;border-radius:8px;border:1px solid #5a4850}
+#gate input{background:#0d0a09;color:#f8f2ec;margin-bottom:12px}
+#gate button{background:#d9a88c;color:#18120f;border:0;font-weight:600;cursor:pointer}
+#gate button[disabled]{opacity:.6;cursor:wait}#gate .x{background:none;color:#dccfc6;border:0;margin-top:8px;font-weight:400}
+#gerr{color:#f0a0a0;font-size:14px;min-height:20px;margin:10px 0 0}
+</style>
+<div id="gate" role="dialog" aria-modal="true" aria-labelledby="gh"><form id="gf" autocomplete="off">
+<h2 id="gh">Enter the password to continue</h2><p>The rest of this presentation is private.</p>
+<input id="gpw" type="password" inputmode="numeric" placeholder="Password" aria-label="Password">
+<button id="ggo" type="submit">Continue</button><button id="gx" type="button" class="x">Back to first slide</button><div id="gerr" role="alert"></div></form></div>
+<script>
+(function(){
+var D={salt:"__SALT__",iv:"__IV__",iter:__ITER__,data:"__DATA__"};
+function u8(b){var s=atob(b),a=new Uint8Array(s.length);for(var i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return a}
+async function dec(pw){
+  var k=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveKey"]);
+  var key=await crypto.subtle.deriveKey({name:"PBKDF2",salt:u8(D.salt),iterations:D.iter,hash:"SHA-256"},k,{name:"AES-GCM",length:256},false,["decrypt"]);
+  return new TextDecoder().decode(await crypto.subtle.decrypt({name:"AES-GCM",iv:u8(D.iv)},key,u8(D.data)))}
+function show(html){document.open();document.write(html);document.close()}
+var ov=document.getElementById("gate"),f=document.getElementById("gf"),pw=document.getElementById("gpw"),btn=document.getElementById("ggo"),err=document.getElementById("gerr");
+function ask(){ov.classList.add("on");err.textContent="";setTimeout(function(){pw.focus()},0)}
+function why(x){
+  if(!window.crypto||!crypto.subtle)return"This page needs a secure connection. Open it at https://"+location.host+" and try again.";
+  if(x&&x.name==="OperationError")return"Wrong password.";
+  return"Could not open the presentation ("+(x&&x.name||"error")+").";}
+// Going past slide 1 asks for the password; going back is handled by the deck itself.
+var orig=window.go;window.go=function(n){if(n>0)ask();else orig(n)};
+["keydown","touchend","touchstart"].forEach(function(t){ov.addEventListener(t,function(e){e.stopPropagation()},t==="touchend"?{passive:true}:false)});
+ov.addEventListener("keydown",function(e){if(e.key==="Escape")ov.classList.remove("on")});
+document.getElementById("gx").onclick=function(){ov.classList.remove("on")};
+f.addEventListener("submit",async function(e){
+  e.preventDefault();btn.disabled=true;err.textContent="";
+  try{var html=await dec(pw.value);try{sessionStorage.setItem("pw",pw.value)}catch(_){}location.hash="2";show(html)}
+  catch(x){err.textContent=why(x);btn.disabled=false;pw.select()}});
+// A visitor who already entered the password this session goes straight in.
+try{var saved=sessionStorage.getItem("pw");if(saved&&crypto&&crypto.subtle)dec(saved).then(function(h){var n=location.hash;show(h);if(n)location.hash=n},function(){})}catch(_){}
+})();
+</script>
