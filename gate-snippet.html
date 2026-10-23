@@ -17,7 +17,7 @@
 <script>
 (function(){
 // Works on plain http:// and https://: no WebCrypto. Key = SHA-256 repeated __ITER__ times over (salt, password); AES-256-CTR; the plaintext starts with a 16-byte marker that proves the password.
-var D={salt:"__SALT__",iv:"__IV__",iter:__ITER__,data:"__DATA__"},MAGIC="CAFEBLESS-DECK-1";
+var D={salt:"__SALT__",iv:"__IV__",iter:__ITER__,url:"__DATAURL__"},MAGIC="CAFEBLESS-DECK-1";
 function u8(b){var s=atob(b),a=new Uint8Array(s.length);for(var i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return a}
 function frac(x){return Math.floor((x-Math.floor(x))*4294967296)>>>0}
 var P=[],K=new Uint32Array(64),H0=new Uint32Array(8);
@@ -47,8 +47,16 @@ function derive(pw){
   for(var i=0;i<D.iter;i++)k=sha256(cat(k,p,salt));
   return k}
 // Fast path (https, localhost): the browser's own AES. Slow path (plain http): aes-js, so the password is checked on the first 16 bytes before decrypting the rest.
+// The encrypted deck (about 4 MB) is NOT in this page: link-preview engines (Apple Messages) abort on a page that large.
+// It is fetched here, only after a password is typed.
+var enc=null;
+async function loadData(){
+  if(enc)return enc;
+  var r;try{r=await fetch(D.url)}catch(x){var e=new Error("network");e.name="LoadError";throw e}
+  if(!r.ok){var e2=new Error("http "+r.status);e2.name="LoadError";throw e2}
+  enc=u8(await r.text());return enc}
 async function dec(pw){
-  var k=derive(pw),data=u8(D.data),pt;
+  var k=derive(pw),data=await loadData(),pt;
   if(window.crypto&&crypto.subtle){
     var key=await crypto.subtle.importKey("raw",k,"AES-CTR",false,["decrypt"]);
     pt=new Uint8Array(await crypto.subtle.decrypt({name:"AES-CTR",counter:u8(D.iv),length:128},key,data));
@@ -61,7 +69,7 @@ function later(f){return new Promise(function(r,j){setTimeout(function(){try{Pro
 function show(html){document.open();document.write(html);document.close()}
 var ov=document.getElementById("gate"),f=document.getElementById("gf"),pw=document.getElementById("gpw"),btn=document.getElementById("ggo"),err=document.getElementById("gerr");
 function ask(){ov.classList.add("on");err.textContent="";setTimeout(function(){pw.focus()},0)}
-function why(x){return x&&x.name==="BadPassword"?"Wrong password.":"Could not open the presentation ("+(x&&x.name||"error")+")."}
+function why(x){return x&&x.name==="BadPassword"?"Wrong password.":x&&x.name==="LoadError"?"Could not load the presentation. Check your connection and try again.":"Could not open the presentation ("+(x&&x.name||"error")+")."}
 // Going past slide 1 asks for the password; going back is handled by the deck itself.
 var orig=window.go;window.go=function(n){if(n>0)ask();else orig(n)};
 ["keydown","touchend","touchstart"].forEach(function(t){ov.addEventListener(t,function(e){e.stopPropagation()},t==="touchend"?{passive:true}:false)});
