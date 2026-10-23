@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Build index.html from the deck: slide 1 in the clear, slides 2+ behind a password gate.
-The whole deck is encrypted (AES-256-GCM, PBKDF2-SHA256, 600k iterations) and opened in the browser after the password.
+The whole deck is encrypted (AES-256-CTR, key = SHA-256 repeated ITER times over salt+password) and opened in the browser
+after the password. It uses no WebCrypto, so it works on plain http:// too. Casual protection for a landing page, not strong security.
 Usage: build.py <deck.html> <password>   (the password is never written to disk)"""
 import base64, os, re, sys
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.primitives import hashes
+import hashlib
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-ITER = 600_000
+ITER = 100_000
+MAGIC = b"CAFEBLESS-DECK-1"
 src, pw = sys.argv[1], sys.argv[2]
 deck = open(src, encoding="utf8").read()
 
@@ -31,11 +32,16 @@ assert teaser.count(cnt) == 1
 teaser = teaser.replace(cnt, f"c.textContent=(i+1)+' / {total}'")
 teaser = teaser.replace('<meta charset="utf-8">', '<meta charset="utf-8"><meta name="robots" content="noindex,nofollow">', 1)
 
-salt, iv = os.urandom(16), os.urandom(12)
-key = PBKDF2HMAC(hashes.SHA256(), 32, salt, ITER).derive(pw.encode())
-ct = AESGCM(key).encrypt(iv, deck.encode(), None)
+salt, iv = os.urandom(16), os.urandom(16)
+p = pw.encode()
+key = hashlib.sha256(salt + p).digest()
+for _ in range(ITER):
+    key = hashlib.sha256(key + p + salt).digest()
+enc = Cipher(algorithms.AES(key), modes.CTR(iv)).encryptor()
+ct = enc.update(MAGIC + deck.encode()) + enc.finalize()
 b64 = lambda b: base64.b64encode(b).decode()
 snippet = open("gate-snippet.html", encoding="utf8").read()
+snippet = snippet.replace("__AESJS__", open("aes-js.min.js", encoding="utf8").read().replace("</script", "<\\/script"))
 for k, v in {"__SALT__": b64(salt), "__IV__": b64(iv), "__ITER__": str(ITER), "__DATA__": b64(ct)}.items():
     snippet = snippet.replace(k, v)
 assert teaser.count("</body>") == 1
