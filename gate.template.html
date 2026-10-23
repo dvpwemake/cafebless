@@ -1,0 +1,35 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Private Presentation</title>
+<style>
+:root{--bg:#18120f;--rose:#d9a88c;--ivory:#f8f2ec;--line:#5a4850}
+*{box-sizing:border-box}html,body{height:100%;margin:0;background:#0d0a09;color:var(--ivory);font-family:"Segoe UI",Helvetica,Arial,sans-serif}
+main{min-height:100%;display:flex;align-items:center;justify-content:center;padding:16px}
+form{width:100%;max-width:360px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:28px}
+h1{font-size:20px;margin:0 0 6px}p{margin:0 0 18px;color:#dccfc6;font-size:14px}
+input,button{width:100%;font:inherit;padding:12px;border-radius:8px;border:1px solid var(--line)}
+input{background:#0d0a09;color:var(--ivory);margin-bottom:12px}
+button{background:var(--rose);color:#18120f;border:0;font-weight:600;cursor:pointer}
+button:disabled{opacity:.6;cursor:wait}#err{color:#f0a0a0;font-size:14px;min-height:20px;margin:10px 0 0}
+</style></head><body><main>
+<form id="f" autocomplete="off"><h1>Private presentation</h1><p>Enter the password to continue.</p>
+<input id="pw" type="password" inputmode="numeric" placeholder="Password" autofocus aria-label="Password">
+<button id="go" type="submit">Continue</button><div id="err" role="alert"></div></form>
+<noscript><p style="position:fixed;bottom:16px;left:16px">JavaScript is required to view this page.</p></noscript>
+</main>
+<script>
+var D={salt:"__SALT__",iv:"__IV__",iter:__ITER__,data:"__DATA__"};
+function u8(b){var s=atob(b),a=new Uint8Array(s.length);for(var i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return a}
+async function open_(pw){
+  var k=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveKey"]);
+  var key=await crypto.subtle.deriveKey({name:"PBKDF2",salt:u8(D.salt),iterations:D.iter,hash:"SHA-256"},k,{name:"AES-GCM",length:256},false,["decrypt"]);
+  var pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:u8(D.iv)},key,u8(D.data));
+  return new TextDecoder().decode(pt)}
+function show(html){document.open();document.write(html);document.close()}
+async function attempt(pw,quiet){
+  try{var html=await open_(pw);try{sessionStorage.setItem("pw",pw)}catch(e){}show(html);return true}
+  catch(e){if(!quiet)document.getElementById("err").textContent="Wrong password.";return false}}
+document.getElementById("f").addEventListener("submit",async function(e){
+  e.preventDefault();var b=document.getElementById("go");b.disabled=true;document.getElementById("err").textContent="";
+  var ok=await attempt(document.getElementById("pw").value,false);if(!ok){b.disabled=false;document.getElementById("pw").select()}});
+try{var saved=sessionStorage.getItem("pw");if(saved)attempt(saved,true)}catch(e){}
+</script></body></html>
