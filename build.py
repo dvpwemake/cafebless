@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build index.html from the deck: slide 1 in the clear, slides 2+ behind a password gate.
 The whole deck is encrypted (AES-256-CTR, key = SHA-256 repeated ITER times over salt+password) and opened in the browser
-after the password. It uses no WebCrypto, so it works on plain http:// too. Casual protection for a landing page, not strong security.
+after the password; the encrypted deck is a separate file, deck.enc, fetched only after a password is typed. It uses no WebCrypto, so it works on plain http:// too. Casual protection for a landing page, not strong security.
 Usage: build.py <deck.html> <password>   (the password is never written to disk)"""
 import base64, os, re, sys
 import hashlib
@@ -65,9 +65,11 @@ ct = enc.update(MAGIC + deck.encode()) + enc.finalize()
 b64 = lambda b: base64.b64encode(b).decode()
 snippet = open("gate-snippet.html", encoding="utf8").read()
 snippet = snippet.replace("__AESJS__", open("aes-js.min.js", encoding="utf8").read().replace("</script", "<\\/script"))
-for k, v in {"__SALT__": b64(salt), "__IV__": b64(iv), "__ITER__": str(ITER), "__DATA__": b64(ct)}.items():
+tag = hashlib.sha256(ct).hexdigest()[:10]
+open("deck.enc", "w", encoding="ascii").write(b64(ct))
+for k, v in {"__SALT__": b64(salt), "__IV__": b64(iv), "__ITER__": str(ITER), "__DATAURL__": "deck.enc?v=" + tag}.items():
     snippet = snippet.replace(k, v)
 assert teaser.count("</body>") == 1
 page = teaser.replace("</body>", snippet + "</body>")
 open("index.html", "w", encoding="utf8").write(page)
-print("index.html", len(page), "bytes; slides in the clear: 1 of", total)
+print("index.html", len(page), "bytes (must stay small: link-preview engines abort on huge pages); deck.enc", len(b64(ct)), "bytes; slides in the clear: 1 of", total)
